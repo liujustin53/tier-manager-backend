@@ -1,5 +1,6 @@
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
+import { createClient } from 'redis';
 import YAML from 'yaml';
 
 dotenv.config();
@@ -15,7 +16,6 @@ type AnimeEntry = {
 }
 
 type UserConfiguration = {
-  user_name: string;
   access_token: string;
   refresh_token: string;
   expires_in: number;
@@ -28,7 +28,7 @@ type AppConfiguration = {
 export default class TierManager {
   private static _instance: TierManager;
   private _config: AppConfiguration;
-
+  private _redis;
 
   static getInstance(): TierManager {
     if (!TierManager._instance) {
@@ -39,59 +39,75 @@ export default class TierManager {
 
   constructor() {
     this._config = { users: [] };
+    this._redis = createClient();
     if (fs.existsSync("config.yml")) {
       this._config = YAML.parse(fs.readFileSync("config.yml", "utf-8")) as AppConfiguration;
     }
+  }
+
+  async init() {
+    this._redis.on("error", (error) => { console.error(error); });
+    await this._redis.connect();
   }
 
   saveConfig() {
     fs.writeFileSync("config.yml", YAML.stringify(this._config));
   }
 
-  public async authorizeUser(authorization_code: string, code_verifier: string): Promise<UserConfiguration> {
-
-    // authorize user
-    const response = await fetch("https://myanimelist.net/v1/oauth2/token", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Accept": "application/json",
-      },
-      body: JSON.stringify({
-        client_id: process.env.CLIENT_ID,
-        client_secret: process.env.CLIENT_SECRET,
-        redirect_uri: process.env.REDIRECT_URI,
-        code: authorization_code,
-        code_verifier: code_verifier,
-        grant_type: "authorization_code",
-      }),
-    });
-    const data = await response.json();
-
-    // get user name
-    const userResponse = await fetch("https://api.myanimelist.net/v2/users/@me", {
-      method: "GET",
-      headers: {
-        "Authorization": "Bearer " + data.access_token,
-        "Content-Type": "application/json",
-        "Accept": "application/json",
+  public async authorizeUser(authorization_code: string, state: string) {
+    try {
+      // get code challenge from redis
+      const code_challenge = await this._redis.get(state);
+      if (!code_challenge) {
+        throw new Error("Invalid state");
       }
-    });
 
-    const userData = await userResponse.json();
-    const userName = userData.name;
+      // authorize user
+      const details = {
+        client_id: process.env.CLIENT_ID || "",
+        client_secret: process.env.CLIENT_SECRET || "",
+        redirect_uri: process.env.REDIRECT_URI || "",
+        code: authorization_code,
+        code_verifier: code_challenge,
+        grant_type: "authorization_code",
+      };
 
-    
-    const user: UserConfiguration = {
-      user_name: userName,
-      access_token: data.access_token,
-      refresh_token: data.refresh_token,
-      expires_in: data.expires_in,
-    };
+      const formBody = Object.keys(details).map((key) => {
+        return encodeURIComponent(key) + "=" + encodeURIComponent(details[key as keyof typeof details]);
+      }).join("&");
 
-    this._config.users.push(user);
-    this.saveConfig();
+      const response = await fetch("https://myanimelist.net/v1/oauth2/token", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Accept": "application/json",
+        },
+        body: formBody,
+      });
 
-    return user;
+      if (response.status !== 200) {
+        throw new Error("Failed to authorize user");
+      }
+
+      const data = await response.json();
+      console.log(data);
+
+      const user: UserConfiguration = {
+        access_token: data.access_token,
+        refresh_token: data.refresh_token,
+        expires_in: data.expires_in,
+      };
+
+      this._config.users.push(user);
+      this.saveConfig();
+      console.log("Access token: " + user.access_token);
+      return "OK";
+    } catch (error) {
+      console.error(error);
+    }
+  }
+
+  public async saveCodeChallenge(code_challenge: string, state: string) {
+    return await this._redis.set(state, code_challenge);
   }
 }
