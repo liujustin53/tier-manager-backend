@@ -12,28 +12,7 @@ app.use(cors());
 
 const tierManager = TierManager.getInstance();
 
-app.get("/oauth/redirect", async (req, res) => {
-  console.log("Received authorization code");
-  // save authorization code and state from url query
-  const code = req.query.code as string;
-  const state = req.query.state as string;
-
-  if (!code || !state) {
-    res.status(400).send("Invalid request");
-    return;
-  }
-
-  const result = await tierManager.authorizeUser(code, state);
-  if (!result) {
-    res.status(500).send("Internal server error");
-    return;
-  }
-
-  console.log("User authorized");
-  res.redirect("http://localhost:3000/profile");
-});
-
-app.post("/oauth/challenge", async (req, res) => {
+app.post("/oauth/authorize", async (req, res) => {
   console.log("Received code challenge and state");
 
   // save code challenge and state from url query
@@ -55,10 +34,26 @@ app.post("/oauth/challenge", async (req, res) => {
   res.status(200).send("OK");
 });
 
-app.get("/oauth/challenge", async (req, res) => {
-  console.log("Received code challenge and state");
-});
+app.get("/oauth/redirect", async (req, res) => {
+  console.log("Received authorization code");
+  // save authorization code and state from url query
+  const code = req.query.code as string;
+  const state = req.query.state as string;
 
+  if (!code || !state) {
+    res.status(400).send("Invalid request");
+    return;
+  }
+
+  const result = await tierManager.authorizeUser(code, state);
+  if (!result) {
+    res.status(500).send("Internal server error");
+    return;
+  }
+
+  console.log("User authorized");
+  res.redirect("http://localhost:3000/profile");
+});
 
 const PORT = process.env.PORT || 8000;
 

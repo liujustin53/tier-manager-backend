@@ -1,5 +1,6 @@
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
+import pkceChallenge from 'pkce-challenge';
 import { createClient } from 'redis';
 import YAML from 'yaml';
 
@@ -54,6 +55,10 @@ export default class TierManager {
     fs.writeFileSync("config.yml", YAML.stringify(this._config));
   }
 
+  public async saveCodeChallenge(code_challenge: string, state: string) {
+    return await this._redis.set(state, code_challenge);
+  }
+
   public async authorizeUser(authorization_code: string, state: string) {
     try {
       // get code challenge from redis
@@ -61,6 +66,8 @@ export default class TierManager {
       if (!code_challenge) {
         throw new Error("Invalid state");
       }
+      // delete code challenge from redis
+      await this._redis.del(state);
 
       // authorize user
       const details = {
@@ -76,6 +83,10 @@ export default class TierManager {
         return encodeURIComponent(key) + "=" + encodeURIComponent(details[key as keyof typeof details]);
       }).join("&");
 
+      // console.log(code_challenge);
+      // console.log(state);
+      // console.log(formBody);
+
       const response = await fetch("https://myanimelist.net/v1/oauth2/token", {
         method: "POST",
         headers: {
@@ -90,7 +101,6 @@ export default class TierManager {
       }
 
       const data = await response.json();
-      console.log(data);
 
       const user: UserConfiguration = {
         access_token: data.access_token,
@@ -101,13 +111,10 @@ export default class TierManager {
       this._config.users.push(user);
       this.saveConfig();
       console.log("Access token: " + user.access_token);
-      return "OK";
+      return 1;
     } catch (error) {
       console.error(error);
+      return 0;
     }
-  }
-
-  public async saveCodeChallenge(code_challenge: string, state: string) {
-    return await this._redis.set(state, code_challenge);
   }
 }
