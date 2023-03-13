@@ -250,6 +250,7 @@ export default class TierManager {
         entries.push({ animanga_id, main_picture, score });
       });
 
+      // add entries to user configuration
       if (user[list_type]) {
         user[list_type] = user[list_type]?.concat(entries);
       } else {
@@ -262,6 +263,6 @@ export default class TierManager {
 
     this.saveConfig();
 
-    return user.anime_list;
+    return user[list_type];
   }
 }

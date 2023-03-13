@@ -89,7 +89,6 @@ app.get("/api/list", async (req, res) => {
       return;
     }
     console.log("Type: " + type);
-    console.log("Session id: " + session_id);
 
     const anime_list = await tierManager.getAnimangaList(session_id, type);
     console.log(`${type} list sent`);
