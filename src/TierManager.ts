@@ -122,9 +122,6 @@ export default class TierManager {
     this._config.users.push(user);
     this.saveConfig();
 
-    // save session id to redis
-    await this._redis.set(user.session_id, user.access_token);
-
     return user.session_id;
   }
 

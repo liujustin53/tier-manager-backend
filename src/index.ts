@@ -69,7 +69,6 @@ app.post("/oauth/logout", async (req, res) => {
       res.status(400).send("Invalid request");
       return;
     }
-    // remove user from manager
     tierManager.logoutUser(session_id);
     console.log("User logged out");
     res.status(200).send("OK");
