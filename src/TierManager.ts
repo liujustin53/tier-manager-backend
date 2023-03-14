@@ -206,7 +206,7 @@ export default class TierManager {
    * @throws Error if the session id is invalid
    * @returns the anime list of the user with the given session id
    */
-  public async getAnimangaList(session_id: string, type: "anime" | "manga") {
+  public async getEntryList(session_id: string, type: "anime" | "manga") {
     const user = this._config.users.find((user) => user.session_id === session_id);
     if (!user) {
       throw new Error("Invalid session id");
