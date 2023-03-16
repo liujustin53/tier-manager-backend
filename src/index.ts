@@ -57,7 +57,8 @@ app.get("/oauth/redirect", async (req, res) => {
 
     console.log("User authorized");
 
-    res.cookie("session_id", session_id);
+    res.cookie("session_id", session_id, { httpOnly: true });
+    res.cookie("is_logged_in", 1);
     res.redirect("http://localhost:3000/dashboard");
   } catch (err) {
     console.error(err);
@@ -79,14 +80,14 @@ app.post("/oauth/logout", async (req, res) => {
     tierManager.logoutUser(session_id);
     console.log("User logged out");
 
-    res.cookie("session_id", "", { expires: new Date(0) });
+    res.cookie("session_id", "", { expires: new Date(0), httpOnly: true});
+    res.cookie("is_logged_in", 0);
     res.status(200).send("OK");
   } catch (err) {
     console.error(err);
     res.status(500).send("Internal server error");
   }
 });
-
 
 app.get("/api/list", async (req, res) => {
   try {
@@ -107,7 +108,7 @@ app.get("/api/list", async (req, res) => {
 
     console.log(`${type} list sent`);
 
-    res.status(200).json(anime_list);
+    res.status(200).json({ list: anime_list });
   } catch (err) {
     console.error(err);
     res.status(500).send("Internal server error");
