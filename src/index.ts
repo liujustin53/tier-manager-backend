@@ -115,6 +115,30 @@ app.get("/api/list", async (req, res) => {
   }
 });
 
+app.get("/api/tiers", async (req, res) => {
+  try {
+    console.log(`Received request for tier list`);
+
+    const session_id = req.cookies.session_id;
+
+    if (!session_id) {
+      res.status(400).send("Invalid request");
+      return;
+    }
+
+    console.log("Session id: " + session_id);
+
+    const tier_list = await tierManager.getTierConfig(session_id);
+
+    console.log(`Tier list sent`);
+
+    res.status(200).json({ tiers: tier_list });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Internal server error");
+  }
+});
 
 const PORT = process.env.PORT || 8000;
 

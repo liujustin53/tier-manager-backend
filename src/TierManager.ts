@@ -13,11 +13,29 @@ type ListEntry = {
   // is_changed: boolean;
 }
 
-type UserConfiguration = {
-  session_id: string;
+type UserToken = {
   access_token: string;
   refresh_token: string;
   expires_at: number;
+}
+
+let defaultTiers: string[] = [
+  "F-", // 1
+  "F", // 2
+  "E", // 3
+  "D", // 4
+  "C", // 5
+  "C+", // 6
+  "B", // 7
+  "A", // 8
+  "S", // 9
+  "SS", // 10
+];
+
+type UserConfiguration = {
+  session_id: string;
+  token_info: UserToken;
+  tier_config: string[];
   anime_list?: ListEntry[];
   manga_list?: ListEntry[];
 }
@@ -114,9 +132,12 @@ export default class TierManager {
     // save user configuration
     const user: UserConfiguration = {
       session_id: await this.generateSessionId(),
-      access_token: data.access_token,
-      refresh_token: data.refresh_token,
-      expires_at: Date.now() + data.expires_in,
+      token_info: {
+        access_token: data.access_token,
+        refresh_token: data.refresh_token,
+        expires_at: Date.now() + data.expires_in
+      },
+      tier_config: defaultTiers,
     };
 
     this._config.users.push(user);
@@ -142,7 +163,7 @@ export default class TierManager {
     const details = {
       client_id: process.env.CLIENT_ID || "",
       client_secret: process.env.CLIENT_SECRET || "",
-      refresh_token: user.refresh_token,
+      refresh_token: user.token_info.refresh_token,
       grant_type: "refresh_token",
     };
 
@@ -165,9 +186,9 @@ export default class TierManager {
 
     const data = await response.json();
 
-    user.access_token = data.access_token;
-    user.refresh_token = data.refresh_token;
-    user.expires_at = Date.now() + data.expires_in;
+    user.token_info.access_token = data.access_token;
+    user.token_info.refresh_token = data.refresh_token;
+    user.token_info.expires_at = Date.now() + data.expires_in;
 
     this.saveConfig();
 
@@ -181,7 +202,7 @@ export default class TierManager {
    * @throws Error if the session id is invalid
    * @returns the access token of the user with the given session id
    */
-  public async getAccessToken(session_id: string) {
+  public async getAccessToken(session_id: string): Promise<string> {
     console.log("Getting access token");
 
     const user = this._config.users.find((user) => user.session_id === session_id);
@@ -192,11 +213,11 @@ export default class TierManager {
     }
 
     // check if access token expired
-    if (user.expires_at < Date.now()) {
+    if (user.token_info.expires_at < Date.now()) {
       await this.refreshAccessToken(user);
     }
 
-    return user.access_token;
+    return user.token_info.access_token;
   }
 
   /**
@@ -206,7 +227,7 @@ export default class TierManager {
    * @throws Error if the session id is invalid
    * @returns the anime list of the user with the given session id
    */
-  public async getEntryList(session_id: string, type: "anime" | "manga") {
+  public async getEntryList(session_id: string, type: "anime" | "manga"): Promise<ListEntry[]> {
     const user = this._config.users.find((user) => user.session_id === session_id);
     if (!user) {
       throw new Error("Invalid session id");
@@ -217,10 +238,10 @@ export default class TierManager {
     // check if user configuration already has the list saved
     if (user[list_type]) {
       console.log(`Using cached ${type} list`);
-      return user[list_type];
+      return user[list_type] as ListEntry[];
     }
 
-    const access_token = user.access_token;
+    const access_token = user.token_info.access_token;
 
     let next = `https://api.myanimelist.net/v2/users/@me/${type}list?fields=list_status&status=completed&limit=1000&sort=list_score`;
 
@@ -243,12 +264,12 @@ export default class TierManager {
       let entries: ListEntry[] = [];
 
       // add the relevant data to the entries array
-      data.data.forEach((animanga: any) => {
-        const animanga_id = animanga.node.id;
-        const main_picture = animanga.node.main_picture.medium;
-        const score = animanga.list_status.score;
+      for (let entry of data.data) {
+        const animanga_id = entry.node.id;
+        const main_picture = entry.node.main_picture.medium;
+        const score = entry.list_status.score;
         entries.push({ animanga_id, main_picture, score });
-      });
+      }
 
       // add entries to user configuration
       if (user[list_type]) {
@@ -263,6 +284,21 @@ export default class TierManager {
 
     this.saveConfig();
 
-    return user[list_type];
+    return user[list_type] as ListEntry[];
+  }
+
+  /**
+   * Gets the tier configuration for the user with the given session id
+   * @param session_id the session id of the user
+   * @throws Error if the session id is invalid
+   * @returns the tier configuration of the user with the given session id
+   */
+  public async getTierConfig(session_id: string): Promise<string[]> {
+    const user = this._config.users.find((user) => user.session_id === session_id);
+    if (!user) {
+      throw new Error("Invalid session id");
+    }
+
+    return user.tier_config;
   }
 }
